@@ -2,5 +2,22 @@
   "name": "loot-market",
   "main": "src/index.js",
   "compatibility_date": "2026-08-30",
-  "workers_dev": true
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "loot-market-db",
+      "database_id": "b92c475c-4475-4734-a13a-517184f169ee",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "loot-market-assets"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
 }
