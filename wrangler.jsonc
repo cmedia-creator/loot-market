@@ -1,6 +1,6 @@
 {
   "name": "loot-market",
-  "main": "src/index.js",
+  "main": "src/entry.js",
   "compatibility_date": "2026-08-30",
   "workers_dev": true,
   "d1_databases": [
