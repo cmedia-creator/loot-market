@@ -152,7 +152,29 @@ export default {
     if (url.pathname === "/api/admin/bootstrap" && request.method === "POST") {
       const result = await bootstrapFirstAdmin(request, env);
       if (!result.ok) return json({ ok: false, error: result.error }, result.status);
-      return json({ ok: true, user: result.user }, result.status);
+      return json({ ok: true, user: result.user, created: result.created }, result.status);
+    }
+
+    if (url.pathname === "/api/admin/first-setup" && request.method === "POST") {
+      let credentials = {};
+      try { credentials = await request.clone().json(); } catch {}
+      const result = await bootstrapFirstAdmin(request, env);
+      if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+      const email = String(credentials.email || result.user?.email || '').trim();
+      const password = String(credentials.password || '');
+      if (!email || password.length < 8) return json({ ok: false, error: '管理者は作成されました。ログイン情報を確認してください。' }, 400);
+      const signInResponse = await createAuth(env).api.signInEmail({
+        body: { email, password, rememberMe: true },
+        asResponse: true,
+      });
+      if (!signInResponse.ok) return json({ ok: false, error: '管理者は作成されましたが、自動ログインに失敗しました。' }, 500);
+      const headers = new Headers(signInResponse.headers);
+      headers.set('content-type', 'application/json; charset=utf-8');
+      headers.set('cache-control', 'no-store');
+      return new Response(JSON.stringify({ ok: true, user: result.user, created: result.created }), {
+        status: 201,
+        headers,
+      });
     }
 
     if (url.pathname === "/api/me" || url.pathname.startsWith("/api/me/")) {

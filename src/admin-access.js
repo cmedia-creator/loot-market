@@ -33,25 +33,36 @@ function shell(title, content, script = '') {
 <body><div class="wrap"><div class="brand">LOOT MARKET / OPERATIONS</div>${content}</div>${script ? `<script>${script}</script>` : ''}</body></html>`;
 }
 
-function loginPage() {
-  const content = `<section class="card"><h1 class="title">管理者ログイン</h1><div class="sub">ゲームと同じBetter Authアカウントでログインします。管理者登録済みなら、以後ADMIN_TOKENの入力は不要です。</div><label class="field"><span>メールアドレス</span><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label class="field"><span>パスワード</span><input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="8文字以上"></label><div class="actions"><button class="btn" id="login">ログイン</button><button class="btn secondary" id="signup">新規登録</button></div><div class="msg" id="msg"></div></section><a class="link" href="/">← ゲームへ戻る</a>`;
-  const script = `
-const msg=document.getElementById('msg');
+function firstSetupPage(state) {
+  const bridge = state.bridgeReady
+    ? '<div class="warn"><b>初回だけの設定です。</b><br>メール・パスワード・ADMIN_TOKENを入力すると、管理者アカウントの作成とログインをまとめて行います。</div>'
+    : '<div class="warn">Cloudflare側のADMIN_TOKENが未設定です。サーバー設定を確認してください。</div>';
+  const form = state.bridgeReady ? `<label class="field"><span>メールアドレス</span><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label class="field"><span>パスワード</span><input id="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="8文字以上"></label><label class="field"><span>ADMIN_TOKEN（今回だけ）</span><input id="token" type="password" autocomplete="off" placeholder="Cloudflare ADMIN_TOKEN"></label><div class="actions"><button class="btn" id="setup" type="button">管理者アカウントを作成</button></div><div class="msg" id="msg"></div>` : '';
+  const content = `<section class="card"><h1 class="title">初回管理者を作成</h1><div class="sub">先に一般ユーザー登録する必要はありません。この画面だけで管理者アカウントを作れます。</div>${bridge}${form}<div class="tiny">ゲストで遊んだ発見図鑑はこの端末のlocalStorageに残っています。作成後にゲーム画面を開くと、同じアカウントへ引き継がれます。</div></section><a class="link" href="/">← ゲームへ戻る</a>`;
+  const script = state.bridgeReady ? `
+const setup=document.getElementById('setup'),msg=document.getElementById('msg');
 function show(t,e=false){msg.textContent=t;msg.className='msg'+(e?' err':'')}
-function credentials(){return{email:document.getElementById('email').value.trim(),password:document.getElementById('password').value}}
-async function post(path,body){const r=await fetch(path,{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.message||j.error||'認証に失敗しました');return j}
-async function run(mode){const c=credentials();if(!c.email||c.password.length<8){show('メールアドレスと8文字以上のパスワードを入力してください。',true);return}document.getElementById('login').disabled=true;document.getElementById('signup').disabled=true;show(mode==='login'?'ログイン中…':'登録中…');try{if(mode==='login')await post('/api/auth/sign-in/email',{...c,rememberMe:true});else await post('/api/auth/sign-up/email',{...c,name:c.email.split('@')[0]||'LOOT ADMIN'});location.reload()}catch(e){show(e.message,true);document.getElementById('login').disabled=false;document.getElementById('signup').disabled=false}}
-document.getElementById('login').onclick=()=>run('login');document.getElementById('signup').onclick=()=>run('signup');document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter')run('login')});`;
+setup.onclick=async()=>{const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value,token=document.getElementById('token').value.trim();if(!email||password.length<8||!token){show('メール、8文字以上のパスワード、ADMIN_TOKENを入力してください。',true);return}setup.disabled=true;show('管理者アカウントを作成中…');try{const r=await fetch('/api/admin/first-setup',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({email,password})});let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||j.message||'登録に失敗しました');show('作成完了。管理画面を開きます。');setTimeout(()=>location.reload(),250)}catch(e){show(e.message,true);setup.disabled=false}};` : '';
+  return shell('初回管理者を作成', content, script);
+}
+
+function loginPage() {
+  const content = `<section class="card"><h1 class="title">管理者ログイン</h1><div class="sub">登録済みの管理者アカウントでログインします。ADMIN_TOKENは不要です。</div><label class="field"><span>メールアドレス</span><input id="email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"></label><label class="field"><span>パスワード</span><input id="password" type="password" autocomplete="current-password" minlength="8" placeholder="8文字以上"></label><div class="actions"><button class="btn" id="login">ログイン</button></div><div class="msg" id="msg"></div></section><a class="link" href="/">← ゲームへ戻る</a>`;
+  const script = `
+const msg=document.getElementById('msg'),login=document.getElementById('login');
+function show(t,e=false){msg.textContent=t;msg.className='msg'+(e?' err':'')}
+async function run(){const email=document.getElementById('email').value.trim(),password=document.getElementById('password').value;if(!email||password.length<8){show('メールアドレスと8文字以上のパスワードを入力してください。',true);return}login.disabled=true;show('ログイン中…');try{const r=await fetch('/api/auth/sign-in/email',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({email,password,rememberMe:true})});let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.message||j.error||'ログインできませんでした');location.reload()}catch(e){show(e.message,true);login.disabled=false}}
+login.onclick=run;document.getElementById('password').addEventListener('keydown',e=>{if(e.key==='Enter')run()});`;
   return shell('管理者ログイン', content, script);
 }
 
 function bootstrapPage(state) {
   const identity = escapeHtml(state.user?.email || state.user?.name || 'ログイン中');
   const bridge = state.bridgeReady
-    ? '<div class="warn">初回だけ、現在のCloudflare ADMIN_TOKENを入力してこのアカウントを管理者に登録します。登録後はこの入力欄自体が出なくなります。</div>'
+    ? '<div class="warn">このアカウントはログイン済みです。初回だけADMIN_TOKENを入力すると管理者にできます。</div>'
     : '<div class="warn">Cloudflare側のADMIN_TOKENが未設定です。サーバー設定を確認してください。</div>';
   const controls = state.bridgeReady ? `<label class="field"><span>ADMIN_TOKEN（初回のみ）</span><input id="token" type="password" autocomplete="off" placeholder="Cloudflare ADMIN_TOKEN"></label><div class="actions"><button class="btn" id="claim">このアカウントを管理者にする</button><button class="btn secondary" id="logout">ログアウト</button></div><div class="msg" id="msg"></div>` : `<div class="actions"><button class="btn secondary" id="logout">ログアウト</button></div>`;
-  const content = `<section class="card"><div class="status">Better Auth ログイン済み</div><h1 class="title">初回セットアップ</h1><div class="sub">ログイン中: <span class="identity">${identity}</span></div>${bridge}${controls}<div class="tiny">安全のため「最初の管理者」だけがこの方法で登録できます。管理者が1人でも登録された後は、別ユーザーがADMIN_TOKENだけで管理者を奪うことはできません。</div></section>`;
+  const content = `<section class="card"><div class="status">Better Auth ログイン済み</div><h1 class="title">初回セットアップ</h1><div class="sub">ログイン中: <span class="identity">${identity}</span></div>${bridge}${controls}<div class="tiny">最初の管理者だけ登録できます。</div></section>`;
   const script = `
 async function logout(){await fetch('/api/auth/sign-out',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:'{}'}).catch(()=>{});sessionStorage.removeItem('loot_admin_token');location.reload()}
 document.getElementById('logout').onclick=logout;
@@ -86,7 +97,7 @@ function injectSessionAdminUi(source, state) {
 
 export async function handleAdminPage(request, env) {
   const state = await getAdminAccessState(request, env);
-  if (!state.authenticated) return html(loginPage());
+  if (!state.authenticated) return html(state.needsBootstrap ? firstSetupPage(state) : loginPage());
   if (!state.admin) return html(state.needsBootstrap ? bootstrapPage(state) : forbiddenPage(state), state.needsBootstrap ? 200 : 403);
   if (!state.bridgeReady) return html(bridgeMissingPage(state), 503);
   if (!env.ASSETS) return html(shell('管理画面', '<section class="card"><h1 class="title">Static Assets binding がありません</h1></section>'), 503);

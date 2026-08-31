@@ -53,6 +53,28 @@ async function adminRowForUser(env, userId) {
   }
 }
 
+async function adminCount(env) {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS count FROM admin_users').first();
+  return Number(row?.count || 0);
+}
+
+async function claimFirstAdmin(env, userId) {
+  const result = await env.DB.prepare(`
+    INSERT INTO admin_users (user_id, is_active)
+    SELECT ?, 1
+    WHERE NOT EXISTS (SELECT 1 FROM admin_users)
+  `).bind(userId).run();
+  return Boolean(result.meta?.changes);
+}
+
+function validAdminToken(request, env) {
+  return Boolean(env.ADMIN_TOKEN) && request.headers.get('Authorization') === `Bearer ${env.ADMIN_TOKEN}`;
+}
+
+function errorText(error, fallback) {
+  return String(error?.body?.message || error?.message || fallback);
+}
+
 export async function isAdminSession(request, env) {
   const session = await getAuthSession(request, env);
   if (!session?.user?.id) return false;
@@ -64,8 +86,7 @@ export async function getAdminAccessState(request, env) {
   await ensureAdminUsersTable(env);
   const session = await getAuthSession(request, env);
   const user = session?.user || null;
-  const countRow = await env.DB.prepare('SELECT COUNT(*) AS count FROM admin_users').first();
-  const totalAdmins = Number(countRow?.count || 0);
+  const totalAdmins = await adminCount(env);
   const row = user ? await adminRowForUser(env, user.id) : null;
   return {
     authenticated: Boolean(user),
@@ -78,25 +99,57 @@ export async function getAdminAccessState(request, env) {
 
 export async function bootstrapFirstAdmin(request, env) {
   await ensureAdminUsersTable(env);
-  const session = await getAuthSession(request, env);
-  if (!session?.user?.id) return { ok: false, status: 401, error: 'Login required' };
   if (!env.ADMIN_TOKEN) return { ok: false, status: 503, error: 'ADMIN_TOKEN is not configured on the server' };
-  if (request.headers.get('Authorization') !== `Bearer ${env.ADMIN_TOKEN}`) {
-    return { ok: false, status: 401, error: 'Invalid ADMIN_TOKEN' };
+  if (!validAdminToken(request, env)) return { ok: false, status: 401, error: 'ADMIN_TOKENが違います。' };
+  if (await adminCount(env)) return { ok: false, status: 409, error: '管理者はすでに登録されています。ログインしてください。' };
+
+  const session = await getAuthSession(request, env);
+  if (session?.user?.id) {
+    if (!(await claimFirstAdmin(env, session.user.id))) {
+      return { ok: false, status: 409, error: '管理者はすでに登録されています。' };
+    }
+    return {
+      ok: true,
+      status: 201,
+      user: { id: session.user.id, name: session.user.name, email: session.user.email },
+      created: false,
+    };
   }
 
-  const result = await env.DB.prepare(`
-    INSERT INTO admin_users (user_id, is_active)
-    SELECT ?, 1
-    WHERE NOT EXISTS (SELECT 1 FROM admin_users)
-  `).bind(session.user.id).run();
+  let input = {};
+  try { input = await request.json(); } catch {}
+  const email = String(input.email || '').trim().toLowerCase();
+  const password = String(input.password || '');
+  const name = String(input.name || email.split('@')[0] || 'LOOT ADMIN').trim().slice(0, 80);
+  if (!email || !email.includes('@')) return { ok: false, status: 400, error: 'メールアドレスを確認してください。' };
+  if (password.length < 8 || password.length > 128) return { ok: false, status: 400, error: 'パスワードは8〜128文字で入力してください。' };
 
-  if (!result.meta?.changes) {
-    return { ok: false, status: 409, error: 'An administrator is already registered' };
+  const auth = createAuth(env);
+  let user = null;
+  let created = true;
+  try {
+    const data = await auth.api.signUpEmail({ body: { name, email, password } });
+    user = data?.user || data?.data?.user || null;
+  } catch (signUpError) {
+    // A previous failed setup may already have created the account. In that case,
+    // verify the same credentials and continue instead of forcing manual recovery.
+    try {
+      const data = await auth.api.signInEmail({ body: { email, password, rememberMe: true } });
+      user = data?.user || data?.data?.user || null;
+      created = false;
+    } catch {
+      return { ok: false, status: 400, error: errorText(signUpError, 'アカウントを作成できませんでした。') };
+    }
+  }
+
+  if (!user?.id) return { ok: false, status: 500, error: 'ユーザー情報を取得できませんでした。' };
+  if (!(await claimFirstAdmin(env, user.id))) {
+    return { ok: false, status: 409, error: '管理者はすでに登録されています。' };
   }
   return {
     ok: true,
     status: 201,
-    user: { id: session.user.id, name: session.user.name, email: session.user.email },
+    user: { id: user.id, name: user.name, email: user.email },
+    created,
   };
 }
