@@ -1,4 +1,5 @@
 import app from "./index.js";
+import { createAuth } from "./auth.js";
 
 function mediaUrl(origin, key) {
   if (!key) return "";
@@ -24,6 +25,22 @@ function attachImageUrls(data, origin) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/auth" || url.pathname.startsWith("/api/auth/")) {
+      return createAuth(env).handler(request);
+    }
+
+    if (url.pathname === "/api/auth-check") {
+      const session = await createAuth(env).api.getSession({ headers: request.headers });
+      return new Response(JSON.stringify({
+        ok: true,
+        authenticated: Boolean(session?.user),
+        user: session?.user ? { id: session.user.id, email: session.user.email } : null,
+      }), {
+        headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      });
+    }
+
     const response = await app.fetch(request, env, ctx);
     if (request.method !== "GET" || url.pathname !== "/api/catalog" || !response.ok) return response;
     try {
