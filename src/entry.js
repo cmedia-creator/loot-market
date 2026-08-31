@@ -1,7 +1,6 @@
 import app from "./index.js";
 import { createAuth } from "./auth.js";
 import { handleUserApi } from "./user-api.js";
-import { getMigrations } from "better-auth/db/migration";
 
 function mediaUrl(origin, key) {
   if (!key) return "";
@@ -34,18 +33,6 @@ function json(data, status = 200) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-
-    if (url.pathname === "/api/_dev/auth-migrate" && request.method === "POST") {
-      if (env.AUTH_MIGRATION_MODE !== "1") return json({ ok: false, error: "Not found" }, 404);
-      const auth = createAuth(env);
-      const migrations = await getMigrations(auth.options);
-      await migrations.runMigrations();
-      return json({
-        ok: true,
-        created: migrations.toBeCreated?.map((x) => x.table || x.modelName || x) || [],
-        added: migrations.toBeAdded || [],
-      });
-    }
 
     if (url.pathname === "/api/auth-options" && request.method === "GET") {
       return json({
