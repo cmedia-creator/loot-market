@@ -31,6 +31,14 @@ jobs:
           node --check dice-system.js
           node --check rarity-system.js
           node --check dice-ui-fix.js
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('admin.html','utf8');
+          const m=html.match(/<script>([\s\S]*?)<\/script>/);
+          if(!m) throw new Error('admin inline script not found');
+          fs.writeFileSync('/tmp/admin-inline.js',m[1]);
+          NODE
+          node --check /tmp/admin-inline.js
       - name: Worker dry-run
         run: npm run check:worker
       - name: Apply local D1 migrations
@@ -43,6 +51,7 @@ jobs:
           npx wrangler dev --local --port 8787 \
             --var BETTER_AUTH_SECRET:0123456789abcdef0123456789abcdef \
             --var BETTER_AUTH_URL:http://127.0.0.1:8787 \
+            --var ADMIN_TOKEN:test-admin-token \
             > /tmp/wrangler-dev.log 2>&1 &
           echo $! > /tmp/wrangler.pid
           for i in $(seq 1 30); do
@@ -51,6 +60,26 @@ jobs:
           done
           cat /tmp/wrangler-dev.log
           exit 1
+      - name: Verify stage rule API and catalog projection
+        run: |
+          set -euo pipefail
+          ORIGIN='http://127.0.0.1:8787'
+          AUTH='Authorization: Bearer test-admin-token'
+
+          curl -fsS -X PUT \
+            -H "$AUTH" -H 'content-type: application/json' \
+            -d '{"disabled_turn_dice":["explosion"],"disabled_special_dice":["death"],"disabled_combo_skills":["first"]}' \
+            "$ORIGIN/api/stage-rules/stage-01" > /tmp/rule-put.json
+          node -e "const j=require('/tmp/rule-put.json'); if(!j.ok||j.data.stage_id!=='stage-01'||!j.data.disabled_turn_dice.includes('explosion')||!j.data.disabled_special_dice.includes('death')||!j.data.disabled_combo_skills.includes('first')) process.exit(1)"
+
+          curl -fsS -H "$AUTH" "$ORIGIN/api/stage-rules" > /tmp/rules.json
+          node -e "const j=require('/tmp/rules.json'); const r=j.data.find(x=>x.stage_id==='stage-01'); if(!r||!r.disabled_turn_dice.includes('explosion')||!r.disabled_special_dice.includes('death')||!r.disabled_combo_skills.includes('first')) process.exit(1)"
+
+          curl -fsS "$ORIGIN/api/catalog" > /tmp/catalog.json
+          node -e "const j=require('/tmp/catalog.json'); const s=j.data.find(x=>x.id==='stage-01'); if(!s?.rules||!s.rules.disabled_turn_dice.includes('explosion')||!s.rules.disabled_special_dice.includes('death')||!s.rules.disabled_combo_skills.includes('first')) process.exit(1)"
+
+          status=$(curl -sS -o /tmp/rules-guest.json -w "%{http_code}" "$ORIGIN/api/stage-rules")
+          test "$status" = "401"
       - name: Verify guest, signup, collection, recommendation, logout
         run: |
           set -euo pipefail
