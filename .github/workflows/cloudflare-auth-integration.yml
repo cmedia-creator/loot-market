@@ -83,30 +83,27 @@ jobs:
 
           status=$(curl -sS -o /tmp/rules-guest.json -w "%{http_code}" "$ORIGIN/api/stage-rules")
           test "$status" = "401"
-      - name: Verify guest, signup, admin session, collection, recommendation, logout
+      - name: Verify guest first-admin setup, collection, recommendation, logout
         run: |
           set -euo pipefail
           ORIGIN='http://127.0.0.1:8787'
           status=$(curl -sS -o /tmp/guest.json -w "%{http_code}" "$ORIGIN/api/me/collection")
           test "$status" = "401"
 
+          curl -fsS "$ORIGIN/admin.html" > /tmp/admin-first.html
+          grep -q '初回管理者を作成' /tmp/admin-first.html
+          grep -q '管理者アカウントを作成' /tmp/admin-first.html
+
           curl -fsS -c /tmp/cookies.txt \
             -H 'content-type: application/json' \
+            -H 'Authorization: Bearer test-admin-token' \
             -H "Origin: $ORIGIN" \
-            -d '{"name":"Auth Test","email":"auth-test@example.com","password":"test-password-1234"}' \
-            "$ORIGIN/api/auth/sign-up/email" > /tmp/signup.json
+            -d '{"email":"auth-test@example.com","password":"test-password-1234"}' \
+            "$ORIGIN/api/admin/first-setup" > /tmp/admin-first-setup.json
+          node -e "const j=require('/tmp/admin-first-setup.json'); if(!j.ok||j.user.email!=='auth-test@example.com') process.exit(1)"
 
           curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/auth-check" > /tmp/session.json
           node -e "const j=require('/tmp/session.json'); if(!j.authenticated||j.user.email!=='auth-test@example.com') process.exit(1)"
-
-          curl -fsS -b /tmp/cookies.txt "$ORIGIN/admin.html" > /tmp/admin-bootstrap.html
-          grep -q '初回セットアップ' /tmp/admin-bootstrap.html
-          grep -q '初回のみ' /tmp/admin-bootstrap.html
-
-          curl -fsS -b /tmp/cookies.txt \
-            -X POST -H 'Authorization: Bearer test-admin-token' \
-            "$ORIGIN/api/admin/bootstrap" > /tmp/admin-claim.json
-          node -e "const j=require('/tmp/admin-claim.json'); if(!j.ok||j.user.email!=='auth-test@example.com') process.exit(1)"
 
           curl -fsS -b /tmp/cookies.txt "$ORIGIN/admin.html" > /tmp/admin-page.html
           grep -q 'BETTER AUTH / ADMIN SESSION' /tmp/admin-page.html
@@ -132,6 +129,13 @@ jobs:
 
           curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/me/recommendation" > /tmp/recommendation.json
           node -e "const j=require('/tmp/recommendation.json'); if(j.data?.stage?.id!=='stage-01'||j.data?.category!=='テスト用品') process.exit(1)"
+
+          status=$(curl -sS -o /tmp/second-admin.json -w "%{http_code}" \
+            -H 'content-type: application/json' \
+            -H 'Authorization: Bearer test-admin-token' \
+            -d '{"email":"other@example.com","password":"test-password-1234"}' \
+            "$ORIGIN/api/admin/first-setup")
+          test "$status" = "409"
 
           curl -fsS -b /tmp/cookies.txt -c /tmp/cookies.txt \
             -X POST -H 'content-type: application/json' -H "Origin: $ORIGIN" -d '{}' \
