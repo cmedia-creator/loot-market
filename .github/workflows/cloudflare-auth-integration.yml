@@ -26,6 +26,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
+      - name: Validate battle extension syntax
+        run: node --check dice-system.js
       - name: Worker dry-run
         run: npm run check:worker
       - name: Apply local D1 migrations
@@ -79,7 +81,8 @@ jobs:
           curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/auth-check" > /tmp/after.json
           node -e "const j=require('/tmp/after.json'); if(j.authenticated) process.exit(1)"
 
-          curl -fsS "$ORIGIN/" | grep -q 'LOOT MARKET'
+          curl -fsS "$ORIGIN/" -o /tmp/index.html
+          grep -q 'LOOT MARKET' /tmp/index.html
       - name: Worker log
         if: always()
         run: cat /tmp/wrangler-dev.log || true
