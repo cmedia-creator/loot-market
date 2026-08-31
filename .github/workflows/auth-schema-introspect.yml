@@ -1,0 +1,43 @@
+name: Auth Schema Introspect
+
+on:
+  push:
+    branches:
+      - feat/cloudflare-auth-user-collection
+  workflow_dispatch:
+
+jobs:
+  introspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run build:assets
+      - name: Start local Worker
+        run: |
+          npx wrangler dev --local --port 8787 \
+            --var AUTH_MIGRATION_MODE:1 \
+            --var BETTER_AUTH_SECRET:0123456789abcdef0123456789abcdef \
+            --var BETTER_AUTH_URL:http://127.0.0.1:8787 \
+            > /tmp/wrangler-dev.log 2>&1 &
+          echo $! > /tmp/wrangler.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/api/health >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wrangler-dev.log
+          exit 1
+      - name: Run Better Auth programmatic migration
+        run: |
+          curl -fsS -X POST http://127.0.0.1:8787/api/_dev/auth-migrate | tee /tmp/migrate.json
+          echo
+      - name: Print generated auth schema
+        run: |
+          npx wrangler d1 execute loot-market-db --local --command "SELECT name, sql FROM sqlite_master WHERE type='table' AND name IN ('user','session','account','verification') ORDER BY name;"
+          npx wrangler d1 execute loot-market-db --local --command "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name IN ('user','session','account','verification') AND sql IS NOT NULL ORDER BY name;"
+      - name: Worker log
+        if: always()
+        run: cat /tmp/wrangler-dev.log || true
