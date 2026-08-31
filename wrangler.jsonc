@@ -2,7 +2,13 @@
   "name": "loot-market",
   "main": "src/entry.js",
   "compatibility_date": "2026-08-30",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,0 +1,85 @@
+name: Cloudflare Auth Integration
+
+on:
+  push:
+    branches:
+      - feat/cloudflare-auth-user-collection
+  pull_request:
+    paths:
+      - "src/**"
+      - "migrations/**"
+      - "*.html"
+      - "*.js"
+      - "*.css"
+      - "package.json"
+      - "wrangler.jsonc"
+      - "scripts/**"
+      - ".github/workflows/cloudflare-auth-integration.yml"
+  workflow_dispatch:
+
+jobs:
+  auth-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Worker dry-run
+        run: npm run check:worker
+      - name: Apply local D1 migrations
+        run: npx wrangler d1 migrations apply loot-market-db --local
+      - name: Seed auth integration item
+        run: |
+          npx wrangler d1 execute loot-market-db --local --command "INSERT OR IGNORE INTO items (id,stage_id,name,category,provider,rarity,weirdness,usefulness,gift_power) VALUES ('test-auth-item','stage-01','Auth Test Item','テスト用品','other',3,3,3,3);"
+      - name: Start local Worker
+        run: |
+          npx wrangler dev --local --port 8787 \
+            --var BETTER_AUTH_SECRET:0123456789abcdef0123456789abcdef \
+            --var BETTER_AUTH_URL:http://127.0.0.1:8787 \
+            > /tmp/wrangler-dev.log 2>&1 &
+          echo $! > /tmp/wrangler.pid
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/api/health >/dev/null 2>&1; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/wrangler-dev.log
+          exit 1
+      - name: Verify guest, signup, collection, recommendation, logout
+        run: |
+          set -euo pipefail
+          ORIGIN='http://127.0.0.1:8787'
+          status=$(curl -sS -o /tmp/guest.json -w "%{http_code}" "$ORIGIN/api/me/collection")
+          test "$status" = "401"
+
+          curl -fsS -c /tmp/cookies.txt \
+            -H 'content-type: application/json' \
+            -H "Origin: $ORIGIN" \
+            -d '{"name":"Auth Test","email":"auth-test@example.com","password":"test-password-1234"}' \
+            "$ORIGIN/api/auth/sign-up/email" > /tmp/signup.json
+
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/auth-check" > /tmp/session.json
+          node -e "const j=require('/tmp/session.json'); if(!j.authenticated||j.user.email!=='auth-test@example.com') process.exit(1)"
+
+          curl -fsS -b /tmp/cookies.txt \
+            -X PUT -H 'content-type: application/json' \
+            -d '{"discovered":true,"wanted":true,"saved":true}' \
+            "$ORIGIN/api/me/items/test-auth-item" > /tmp/item.json
+
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/me/collection" > /tmp/collection.json
+          node -e "const j=require('/tmp/collection.json'); const r=j.data.find(x=>x.item_id==='test-auth-item'); if(!r||!Number(r.wanted)||!Number(r.saved)||!r.discovered_at) process.exit(1)"
+
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/me/recommendation" > /tmp/recommendation.json
+          node -e "const j=require('/tmp/recommendation.json'); if(j.data?.stage?.id!=='stage-01'||j.data?.category!=='テスト用品') process.exit(1)"
+
+          curl -fsS -b /tmp/cookies.txt -c /tmp/cookies.txt \
+            -X POST -H 'content-type: application/json' -H "Origin: $ORIGIN" -d '{}' \
+            "$ORIGIN/api/auth/sign-out" > /tmp/signout.json
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/auth-check" > /tmp/after.json
+          node -e "const j=require('/tmp/after.json'); if(j.authenticated) process.exit(1)"
+
+          curl -fsS "$ORIGIN/" | grep -q 'LOOT MARKET'
+      - name: Worker log
+        if: always()
+        run: cat /tmp/wrangler-dev.log || true

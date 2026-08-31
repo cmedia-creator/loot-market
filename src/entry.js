@@ -1,4 +1,6 @@
 import app from "./index.js";
+import { createAuth } from "./auth.js";
+import { handleUserApi } from "./user-api.js";
 
 function mediaUrl(origin, key) {
   if (!key) return "";
@@ -21,9 +23,43 @@ function attachImageUrls(data, origin) {
   return data;
 }
 
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/auth-options" && request.method === "GET") {
+      return json({
+        email: true,
+        google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+      });
+    }
+
+    if (url.pathname === "/api/auth" || url.pathname.startsWith("/api/auth/")) {
+      return createAuth(env).handler(request);
+    }
+
+    if (url.pathname === "/api/auth-check") {
+      const session = await createAuth(env).api.getSession({ headers: request.headers });
+      return json({
+        ok: true,
+        authenticated: Boolean(session?.user),
+        user: session?.user ? { id: session.user.id, name: session.user.name, email: session.user.email } : null,
+      });
+    }
+
+    if (url.pathname === "/api/me" || url.pathname.startsWith("/api/me/")) {
+      const handled = await handleUserApi(request, env, url);
+      if (handled) return handled;
+      return json({ ok: false, error: "Not found" }, 404);
+    }
+
     const response = await app.fetch(request, env, ctx);
     if (request.method !== "GET" || url.pathname !== "/api/catalog" || !response.ok) return response;
     try {
