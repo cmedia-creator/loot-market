@@ -23,6 +23,10 @@ const RARE_ENEMIES=[
   {key:'merchant',name:'逃走商人',icon:'🏃',rate:.05,hp:12,attack_min:1,attack_max:2,lootCount:1,minRarity:4,turnLimit:2,tag:'RARE 5%',desc:'2ターン以内に倒すと★★★★以上の商品を確定ドロップ。'}
 ];
 
+function stageRuleDisabled(group,key){
+  const list=selectedStage?.rules?.[group];
+  return Array.isArray(list)&&list.includes(key);
+}
 function ensureRunDice(){
   if(!run)return;
   if(!run.specialDice)run.specialDice={revive:0,gamble:0,triple:0,death:0};
@@ -33,7 +37,11 @@ function ensureRunDice(){
 }
 function drawTurnDie(){
   const r=Math.random();let c=0;
-  for(const d of TURN_DICE){c+=d.rate;if(r<c)return d}
+  for(const d of TURN_DICE){
+    const next=c+d.rate;
+    if(r<next)return stageRuleDisabled('disabled_turn_dice',d.key)?NORMAL_DIE:d;
+    c=next;
+  }
   return NORMAL_DIE;
 }
 function assignTurnDie(){
@@ -47,7 +55,9 @@ function rollRareEnemy(){
 }
 function specialDrop(){
   if(Math.random()>=SPECIAL_DROP_RATE)return null;
-  const keys=Object.keys(SPECIAL_DICE);return keys[Math.floor(Math.random()*keys.length)];
+  const keys=Object.keys(SPECIAL_DICE).filter(key=>!stageRuleDisabled('disabled_special_dice',key));
+  if(!keys.length)return null;
+  return keys[Math.floor(Math.random()*keys.length)];
 }
 function rareEnemyObject(def){
   return{
@@ -90,11 +100,12 @@ function updateDiceSystemUi(){
   if(roll&&!locked&&ehp>0)roll.textContent=`${d.icon} ${d.name}を振る`;
   const root=document.getElementById('specialDiceButtons');
   if(root){
-    root.innerHTML=Object.entries(SPECIAL_DICE).map(([key,s])=>{
+    root.innerHTML=Object.entries(SPECIAL_DICE).filter(([key])=>!stageRuleDisabled('disabled_special_dice',key)).map(([key,s])=>{
       const count=Number(run.specialDice[key]||0);
       const disabled=!count||locked||run.hp<=0||ehp<=0||(key==='death'&&(run.hp>5||isBoss));
       return `<button type="button" class="specialDieButton" data-special-die="${key}" ${disabled?'disabled':''}><span>${s.icon}</span><b>${esc(s.name)}</b><em>×${count}</em></button>`;
     }).join('');
+    if(!root.innerHTML)root.innerHTML='<div class="empty">このダンジョンでは保持ダイスが無効。</div>';
     root.querySelectorAll('[data-special-die]').forEach(b=>b.addEventListener('click',()=>useSpecialDie(b.dataset.specialDie)));
   }
   const escape=document.getElementById('escapeBattle');
@@ -119,7 +130,7 @@ function awardSpecialDie(){
   run.pendingSpecialDrop=key;updateDiceSystemUi();return key;
 }
 function consumeSpecialDie(key){
-  ensureRunDice();if(!run.specialDice[key])return false;
+  ensureRunDice();if(stageRuleDisabled('disabled_special_dice',key)||!run.specialDice[key])return false;
   run.specialDice[key]--;run.turnDie=null;updateDiceSystemUi();return true;
 }
 function showSpecialDropBanner(){
@@ -212,8 +223,10 @@ async function rollCurrentTurnDie(){
   await showSingleRoll(n);
   run.history.push(n);if(run.history.length>12)run.history.shift();updateComboHud();
   const missed=d.key==='negative'&&Math.random()<.30;
-  const sequenceSkill=missed?null:detectSequenceSkill();
-  if(fx?.turn?.iron)fx.turn.ironTriggered=predictPlayerSkill(firstAttack,n,sequenceSkill);
+  let sequenceSkill=missed?null:detectSequenceSkill();
+  if(sequenceSkill&&stageRuleDisabled('disabled_combo_skills',sequenceSkill))sequenceSkill=null;
+  const firstSkillAllowed=!stageRuleDisabled('disabled_combo_skills','first');
+  if(fx?.turn?.iron)fx.turn.ironTriggered=Boolean(sequenceSkill||(firstAttack&&n>=5&&firstSkillAllowed));
   let damage=0;
   if(missed){setArena('enemyState');document.getElementById('msg').textContent='ネガティブダイス。攻撃は外れた。';await wait(400)}
   else{
@@ -234,13 +247,13 @@ async function rollCurrentTurnDie(){
   finishBossPlayerTurn();
   if(run.hp<=0){if(!await tryRevive()) {gameOver();return}}
   if(ehp<=0){document.getElementById('msg').textContent=`${enemy.name} を撃破！`;ui();await wait(420);showDefeat();return}
-  if(firstAttack&&!missed&&n>=5){await showSkill('first');document.getElementById('msg').textContent='先手必勝！ 反撃前にもう一度振れる。';setArena('enemyState');locked=false;document.getElementById('roll').disabled=false;assignTurnDie();ui();return}
+  if(firstAttack&&!missed&&n>=5&&firstSkillAllowed){await showSkill('first');document.getElementById('msg').textContent='先手必勝！ 反撃前にもう一度振れる。';setArena('enemyState');locked=false;document.getElementById('roll').disabled=false;assignTurnDie();ui();return}
   if(merchantEscapes()){await resolveMerchantEscape();return}
   if(!await standardEnemyRetaliation())return;
   setArena('enemyState');locked=false;document.getElementById('roll').disabled=false;assignTurnDie();ui();
 }
 async function useSpecialDie(key){
-  ensureRunDice();const s=SPECIAL_DICE[key];if(!s||locked||!run.specialDice[key]||run.hp<=0||ehp<=0)return;
+  ensureRunDice();const s=SPECIAL_DICE[key];if(!s||stageRuleDisabled('disabled_special_dice',key)||locked||!run.specialDice[key]||run.hp<=0||ehp<=0)return;
   if(key==='death'&&(run.hp>5||isBoss))return;
   let prediction=null;
   if(key==='gamble'){prediction=await chooseGamblePrediction();if(!prediction)return}
