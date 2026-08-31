@@ -1,6 +1,7 @@
 import app from "./index.js";
-import { createAuth } from "./auth.js";
+import { createAuth, bootstrapFirstAdmin } from "./auth.js";
 import { handleUserApi } from "./user-api.js";
+import { bridgeAdminSession, handleAdminPage } from "./admin-access.js";
 
 function mediaUrl(origin, key) {
   if (!key) return "";
@@ -34,6 +35,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    if (url.pathname === "/admin.html" && request.method === "GET") {
+      return handleAdminPage(request, env);
+    }
+
     if (url.pathname === "/api/auth-options" && request.method === "GET") {
       return json({
         email: true,
@@ -54,13 +59,20 @@ export default {
       });
     }
 
+    if (url.pathname === "/api/admin/bootstrap" && request.method === "POST") {
+      const result = await bootstrapFirstAdmin(request, env);
+      if (!result.ok) return json({ ok: false, error: result.error }, result.status);
+      return json({ ok: true, user: result.user }, result.status);
+    }
+
     if (url.pathname === "/api/me" || url.pathname.startsWith("/api/me/")) {
       const handled = await handleUserApi(request, env, url);
       if (handled) return handled;
       return json({ ok: false, error: "Not found" }, 404);
     }
 
-    const response = await app.fetch(request, env, ctx);
+    const bridgedRequest = await bridgeAdminSession(request, env);
+    const response = await app.fetch(bridgedRequest, env, ctx);
     if (request.method !== "GET" || url.pathname !== "/api/catalog" || !response.ok) return response;
     try {
       const payload = await response.clone().json();
