@@ -47,6 +47,13 @@ export default {
       });
     }
 
+    if (url.pathname === "/api/auth-options" && request.method === "GET") {
+      return json({
+        email: true,
+        google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+      });
+    }
+
     if (url.pathname === "/api/auth" || url.pathname.startsWith("/api/auth/")) {
       return createAuth(env).handler(request);
     }
