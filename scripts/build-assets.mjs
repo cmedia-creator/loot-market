@@ -23,4 +23,5 @@ const files = [
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
 await Promise.all(files.map((file) => copyFile(file, `dist/${file}`)));
-console.log(`Prepared ${files.length} static assets for Workers Static Assets.`);
+await copyFile('admin.html', 'dist/admin-console.html');
+console.log(`Prepared ${files.length + 1} static assets for Workers Static Assets.`);
