@@ -1,5 +1,6 @@
 import app from "./index.js";
 import { createAuth } from "./auth.js";
+import { handleUserApi } from "./user-api.js";
 import { getMigrations } from "better-auth/db/migration";
 
 function mediaUrl(origin, key) {
@@ -55,8 +56,14 @@ export default {
       return json({
         ok: true,
         authenticated: Boolean(session?.user),
-        user: session?.user ? { id: session.user.id, email: session.user.email } : null,
+        user: session?.user ? { id: session.user.id, name: session.user.name, email: session.user.email } : null,
       });
+    }
+
+    if (url.pathname === "/api/me" || url.pathname.startsWith("/api/me/")) {
+      const handled = await handleUserApi(request, env, url);
+      if (handled) return handled;
+      return json({ ok: false, error: "Not found" }, 404);
     }
 
     const response = await app.fetch(request, env, ctx);
