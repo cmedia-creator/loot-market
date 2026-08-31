@@ -135,10 +135,35 @@ function installDiceDamageGuard(){
   applyPlayerDamage=guarded;
 }
 
+function compactHomeGuide(){
+  const stage=document.getElementById('stage');
+  const guide=stage?.querySelector('.guidePanel');
+  if(!stage||!guide||guide.dataset.compactHome==='1')return;
+  const dungeon=[...stage.children].find(el=>el.classList?.contains('panel')&&!el.classList.contains('guidePanel'));
+  if(dungeon&&dungeon.nextElementSibling!==guide)dungeon.insertAdjacentElement('afterend',guide);
+
+  const intro=guide.querySelector('.guideIntro');
+  const grid=guide.querySelector('.guideGrid');
+  if(!grid)return;
+  guide.querySelectorAll('.guideBlock').forEach(d=>d.removeAttribute('open'));
+
+  const master=document.createElement('details');
+  master.className='guideMaster';
+  master.innerHTML='<summary><span class="guideMasterIcon">📘</span><span class="guideMasterText"><b>ゲームガイド</b><small>遊び方・特殊ダイス・保持ダイス・スキル・レア敵</small></span><span class="guideMasterAction">見る</span></summary>';
+  const body=document.createElement('div');
+  body.className='guideMasterBody';
+  if(intro){intro.classList.add('guideIntroInside');body.appendChild(intro)}
+  body.appendChild(grid);
+  master.appendChild(body);
+  guide.replaceChildren(master);
+  guide.dataset.compactHome='1';
+}
+
 function boot(){
   installDiceDamageGuard();
   if(!compactHeldDiceUi())setTimeout(compactHeldDiceUi,80);
   observeSpecialDrops();
+  compactHomeGuide();
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});
