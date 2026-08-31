@@ -16,7 +16,8 @@ const files = [
   'rarity-system.css',
   'rarity-system.js',
   'dice-ui-fix.css',
-  'dice-ui-fix.js'
+  'dice-ui-fix.js',
+  'guide.css'
 ];
 
 await rm('dist', { recursive: true, force: true });
