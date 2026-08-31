@@ -30,6 +30,7 @@ jobs:
         run: |
           node --check dice-system.js
           node --check rarity-system.js
+          node --check dice-ui-fix.js
       - name: Worker dry-run
         run: npm run check:worker
       - name: Apply local D1 migrations
@@ -86,6 +87,7 @@ jobs:
           curl -fsS "$ORIGIN/" -o /tmp/index.html
           grep -q 'LOOT MARKET' /tmp/index.html
           grep -q 'rarity-system.js' /tmp/index.html
+          grep -q 'dice-ui-fix.js' /tmp/index.html
       - name: Worker log
         if: always()
         run: cat /tmp/wrangler-dev.log || true
