@@ -12,7 +12,9 @@ const files = [
   'account-ui.css',
   'account-ui.js',
   'dice-system.css',
-  'dice-system.js'
+  'dice-system.js',
+  'rarity-system.css',
+  'rarity-system.js'
 ];
 
 await rm('dist', { recursive: true, force: true });
