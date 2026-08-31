@@ -8,7 +8,9 @@ const files = [
   'boss-skills.css',
   'boss-skills.js',
   'affiliate-ui.css',
-  'affiliate-ui.js'
+  'affiliate-ui.js',
+  'account-ui.css',
+  'account-ui.js'
 ];
 
 await rm('dist', { recursive: true, force: true });
