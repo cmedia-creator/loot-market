@@ -11,9 +11,10 @@ openItemDetail=function(id){
   box.innerHTML=`<button class="action ${mem.w.has(id)?'on':''}" id="detailWish" type="button">♡ 欲しい</button><button class="action ${mem.o.has(id)?'on':''}" id="detailOwn" type="button">✓ 持ってる</button><button class="action ${mem.s?.has(id)?'on':''}" id="detailLater" type="button">🔖 あとで見る</button>`;
   const affiliate=body.querySelector('.affiliateNotice,.itemNoLink');
   if(affiliate)body.insertBefore(box,affiliate);else body.appendChild(box);
-  detailWish.onclick=()=>tog('w',id,detailWish);
-  detailOwn.onclick=()=>tog('o',id,detailOwn);
-  detailLater.onclick=()=>tog('s',id,detailLater);
+  const wish=document.getElementById('detailWish'),own=document.getElementById('detailOwn'),later=document.getElementById('detailLater');
+  wish.onclick=()=>tog('w',id,wish);
+  own.onclick=()=>tog('o',id,own);
+  later.onclick=()=>tog('s',id,later);
 };
 
 function topWantedCategory(){
@@ -35,7 +36,8 @@ function addRecommendation(){
   const note=document.createElement('div');note.id='wishRecommendation';note.className='mission';note.style.gridColumn='1 / -1';
   note.innerHTML=`<div class="k">FOR YOU / WISHLIST</div><b>「${esc(category)}」が気になっているなら ${esc(rec.stage.name)}</b><div class="sub">欲しい登録の傾向から提案。該当商品 ${rec.score}件。</div><button class="btn2" id="wishRecommendationGo" type="button">このダンジョンを見る</button>`;
   root.insertBefore(note,root.firstChild);
-  wishRecommendationGo.onclick=()=>selectStage(rec.stage.id);
+  const go=document.getElementById('wishRecommendationGo');
+  go.onclick=()=>selectStage(rec.stage.id);
 }
 
 const baseRenderStageList=renderStageList;
