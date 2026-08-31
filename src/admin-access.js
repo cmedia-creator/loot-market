@@ -91,7 +91,11 @@ export async function handleAdminPage(request, env) {
   if (!state.bridgeReady) return html(bridgeMissingPage(state), 503);
   if (!env.ASSETS) return html(shell('管理画面', '<section class="card"><h1 class="title">Static Assets binding がありません</h1></section>'), 503);
 
-  const asset = await env.ASSETS.fetch(request);
+  const assetUrl = new URL(request.url);
+  assetUrl.pathname = '/admin-console.html';
+  assetUrl.search = '';
+  const assetRequest = new Request(assetUrl.toString(), { method: 'GET', headers: request.headers });
+  const asset = await env.ASSETS.fetch(assetRequest);
   if (!asset.ok) return asset;
   const source = await asset.text();
   const headers = new Headers(asset.headers);
