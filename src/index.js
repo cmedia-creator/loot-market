@@ -84,6 +84,11 @@ const INT_FIELDS = new Set([
   "min_loot_rarity","price_yen","rarity","weirdness","usefulness","gift_power","target_value"
 ]);
 const REAL_FIELDS = new Set(["encounter_rate"]);
+const STAGE_RULE_ALLOWED = {
+  disabled_turn_dice: new Set(["explosion","lucky","drain","minus","negative","revenge"]),
+  disabled_special_dice: new Set(["revive","gamble","triple","death"]),
+  disabled_combo_skills: new Set(["rescue","beloved","blessing","theory","first"])
+};
 
 function normalizeValue(field, value) {
   if (value === undefined) return undefined;
@@ -207,6 +212,71 @@ async function deleteResource(request, env, resource, id) {
   return json({ ok:true, deleted:id });
 }
 
+function parseRuleArray(value) {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch { return []; }
+}
+
+function normalizeRuleArray(field, value) {
+  if (!Array.isArray(value)) throw new Error(`${field} must be an array`);
+  const allowed = STAGE_RULE_ALLOWED[field];
+  const result = [];
+  for (const raw of value) {
+    const key = String(raw || "").trim();
+    if (!allowed.has(key)) throw new Error(`Unknown ${field} value: ${key}`);
+    if (!result.includes(key)) result.push(key);
+  }
+  return result;
+}
+
+function rulePayload(row = {}) {
+  return {
+    disabled_turn_dice: parseRuleArray(row.disabled_turn_dice),
+    disabled_special_dice: parseRuleArray(row.disabled_special_dice),
+    disabled_combo_skills: parseRuleArray(row.disabled_combo_skills)
+  };
+}
+
+async function listStageRules(request, env) {
+  const denied = requireAdmin(request, env); if (denied) return denied;
+  const result = await env.DB.prepare(`
+    SELECT s.id AS stage_id, s.name, s.slug, s.is_active,
+      COALESCE(r.disabled_turn_dice, '[]') AS disabled_turn_dice,
+      COALESCE(r.disabled_special_dice, '[]') AS disabled_special_dice,
+      COALESCE(r.disabled_combo_skills, '[]') AS disabled_combo_skills,
+      r.updated_at
+    FROM stages s
+    LEFT JOIN stage_game_rules r ON r.stage_id = s.id
+    ORDER BY s.sort_order, s.created_at
+  `).all();
+  return json({ ok:true, data:(result.results || []).map(row => ({ ...row, ...rulePayload(row) })) });
+}
+
+async function upsertStageRules(request, env, stageId) {
+  const denied = requireAdmin(request, env); if (denied) return denied;
+  const stage = await env.DB.prepare("SELECT id FROM stages WHERE id = ?").bind(stageId).first();
+  if (!stage) return json({ ok:false, error:"Stage not found" }, 404);
+  const body = await readJson(request);
+  const turn = normalizeRuleArray("disabled_turn_dice", body.disabled_turn_dice || []);
+  const special = normalizeRuleArray("disabled_special_dice", body.disabled_special_dice || []);
+  const combo = normalizeRuleArray("disabled_combo_skills", body.disabled_combo_skills || []);
+  await env.DB.prepare(`
+    INSERT INTO stage_game_rules (stage_id, disabled_turn_dice, disabled_special_dice, disabled_combo_skills)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(stage_id) DO UPDATE SET
+      disabled_turn_dice = excluded.disabled_turn_dice,
+      disabled_special_dice = excluded.disabled_special_dice,
+      disabled_combo_skills = excluded.disabled_combo_skills,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(stageId, JSON.stringify(turn), JSON.stringify(special), JSON.stringify(combo)).run();
+  const row = await env.DB.prepare("SELECT * FROM stage_game_rules WHERE stage_id = ?").bind(stageId).first();
+  return json({ ok:true, data:{ stage_id:stageId, ...rulePayload(row), updated_at:row?.updated_at || null } });
+}
+
 async function catalog(env) {
   const statements = [
     env.DB.prepare("SELECT * FROM stages WHERE is_active = 1 ORDER BY sort_order, created_at"),
@@ -216,8 +286,16 @@ async function catalog(env) {
     env.DB.prepare("SELECT * FROM stage_conditions WHERE is_active = 1 ORDER BY stage_id, sort_order, created_at")
   ];
   const [stages,enemies,bosses,items,conditions] = await env.DB.batch(statements);
+  let ruleRows = [];
+  try {
+    const rules = await env.DB.prepare("SELECT * FROM stage_game_rules").all();
+    ruleRows = rules.results || [];
+  } catch (error) {
+    if (!/no such table: stage_game_rules/i.test(String(error?.message || error))) throw error;
+  }
+  const ruleMap = new Map(ruleRows.map(row => [row.stage_id, rulePayload(row)]));
   const stageRows = stages.results || [];
-  const byStage = new Map(stageRows.map(s => [s.id, { ...s, enemies:[], bosses:[], items:[], conditions:[] }]));
+  const byStage = new Map(stageRows.map(s => [s.id, { ...s, rules:ruleMap.get(s.id) || rulePayload(), enemies:[], bosses:[], items:[], conditions:[] }]));
   for (const row of enemies.results || []) byStage.get(row.stage_id)?.enemies.push(row);
   for (const row of bosses.results || []) byStage.get(row.stage_id)?.bosses.push(row);
   for (const row of items.results || []) byStage.get(row.stage_id)?.items.push(row);
@@ -274,6 +352,12 @@ export default {
       }
       if (!env.DB || !env.MEDIA) return json({ ok:false, error:"Required Cloudflare bindings are missing" }, 503);
       if (url.pathname === "/api/catalog" && request.method === "GET") return catalog(env);
+      if (url.pathname === "/api/stage-rules" && request.method === "GET") return listStageRules(request, env);
+      if (url.pathname.startsWith("/api/stage-rules/")) {
+        const stageId = decodeURIComponent(url.pathname.slice("/api/stage-rules/".length));
+        if (!stageId) return json({ ok:false, error:"Stage id is required" }, 400);
+        if (request.method === "PUT" || request.method === "PATCH") return upsertStageRules(request, env, stageId);
+      }
       if (url.pathname === "/api/media" && request.method === "POST") return uploadMedia(request, env, url);
       if (url.pathname.startsWith("/api/media/")) {
         const key = decodeURIComponent(url.pathname.slice("/api/media/".length));
@@ -294,7 +378,7 @@ export default {
       return json({ ok:false, error:"Not found" }, 404);
     } catch (error) {
       const message = String(error?.message || error);
-      const status = /UNIQUE constraint failed/i.test(message) ? 409 : /required|must be|cannot exceed|Invalid JSON|No updatable/i.test(message) ? 400 : 500;
+      const status = /UNIQUE constraint failed/i.test(message) ? 409 : /required|must be|cannot exceed|Invalid JSON|No updatable|Unknown disabled_/i.test(message) ? 400 : 500;
       return json({ ok:false, error:message }, status);
     }
   }
