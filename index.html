@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="./dice-system.css?v=20260831-01">
 <link rel="stylesheet" href="./rarity-system.css?v=20260831-01">
 <link rel="stylesheet" href="./dice-ui-fix.css?v=20260831-01">
+<link rel="stylesheet" href="./guide.css?v=20260831-01">
 </head>
 <body>
 <div class="app">
@@ -21,6 +22,110 @@
   </div>
 
   <section id="stage" class="screen on">
+    <div class="panel guidePanel">
+      <div class="guideIntro">
+        <div><div class="k">HOW TO PLAY</div><div class="title">遊び方・ダイス・スキル</div><div class="sub">基本は「サイコロを振る」だけ。特殊ダイス、コンボ、レア敵を知ると攻略の幅が広がる。</div></div>
+      </div>
+      <div class="guideGrid">
+        <details class="guideBlock" open>
+          <summary>🎮 基本操作</summary>
+          <div class="guideBody">
+            <div class="guideLead">ステージごとに表示される条件を達成してボスを呼び出し、撃破すればクリア。</div>
+            <div class="guideList">
+              <div class="guideItem"><div class="guideItemIcon">🎲</div><div><b>サイコロを振る</b><span>出目が基本ダメージ。敵を倒すと実在商品や、低確率で回復・保持ダイスを獲得する。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">📦</div><div><b>商品を発見</b><span>発見した商品は図鑑へ登録。「欲しい」「持ってる」「あとで見る」に保存できる。購入は攻略条件ではない。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🏃</div><div><b>逃げる</b><span>ボス以外はいつでも100%逃走成功。ペナルティなし。危険なレア敵から撤退してもいい。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🎒</div><div><b>保持ダイス</b><span>戦闘画面の「保持ダイス」から使用。ステージ終了時に消滅するので、抱え落ちはただの悲劇。</span></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="guideBlock">
+          <summary>✨ 特殊ダイス <span class="guideTag">毎ターン抽選</span></summary>
+          <div class="guideBody">
+            <div class="guideLead">毎ターン20.5%で特殊ダイス。残り79.5%はノーマルダイス。</div>
+            <div class="guideList">
+              <div class="guideItem"><div class="guideItemIcon">💥</div><div><b>爆発ダイス <em>10%</em></b><span>4以上で追加ダメージ+2。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🍀</div><div><b>ラッキーダイス <em>5%</em></b><span>必ず4以上が出る。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🩸</div><div><b>ドレインダイス <em>3%</em></b><span>出目ぶん攻撃し、同じ数だけHPを回復。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">➖</div><div><b>マイナスダイス <em>1%</em></b><span>攻撃力が「出目-1」になる。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">☁️</div><div><b>ネガティブダイス <em>1%</em></b><span>30%で攻撃が外れる。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🕷️</div><div><b>復讐のダイス <em>0.5%</em></b><span>出目2以下だと敵HPが10回復する。</span></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="guideBlock">
+          <summary>🎒 スペシャルダイス <span class="guideTag rare">15% DROP</span></summary>
+          <div class="guideBody">
+            <div class="guideLead">非ボス敵撃破時に15%で1個獲得。好きなタイミングで使える消費ダイス。</div>
+            <div class="guideList">
+              <div class="guideItem"><div class="guideItemIcon">🪽</div><div><b>復活のダイス</b><span>通常攻撃を行い、次の敵ターンでHP0になった場合はHP10で復活。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🎯</div><div><b>ギャンブルダイス</b><span>出目を予想。的中なら出目×1.5倍ダメージ、外れたら攻撃なしで敵ターン。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🎰</div><div><b>ゾロ目ダイス</b><span>3個の出目が全部同じなら合計値を敵へ。失敗すると合計値を自分が受ける。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">☠️</div><div><b>デスダイス</b><span>自分のHPが5以下のときだけ使用可能。非ボス敵のHPを0にする。</span></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="guideBlock">
+          <summary>⚡ コンボスキル</summary>
+          <div class="guideBody">
+            <div class="guideLead">直近の出目が特定の並びになると自動発動。DICE HISTORYを見れば狙い目が分かる。</div>
+            <div class="guideList">
+              <div class="guideItem"><div class="guideItemIcon">✦</div><div><b>神の救済 <em>1 → 1</em></b><span>3個のサイコロを追加で振り、合計値で追撃。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">♛</div><div><b>神に愛されし者 <em>6 → 6</em></b><span>2個のサイコロを追加で振り、合計値で追撃。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">✧</div><div><b>女神の祝福 <em>1 → 2 → 3</em></b><span>HPを最大まで完全回復。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">⚔</div><div><b>強者の理論 <em>4 → 5 → 6</em></b><span>次の3回の攻撃ダメージが2倍。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">⚡</div><div><b>先手必勝</b><span>敵への初撃で5以上を出すと、敵の反撃前にもう一度攻撃できる。</span></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="guideBlock">
+          <summary>👹 ボススキル</summary>
+          <div class="guideBody">
+            <div class="guideLead">ボスは戦闘中に特殊能力を発動する。発動中の効果はBOSS SKILL表示をタップして確認できる。</div>
+            <div class="guideList">
+              <div class="guideItem"><div class="guideItemIcon">↩</div><div><b>リフレクト</b><span>次の通常サイコロが6なら、プレイヤー自身に6ダメージ。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">♨</div><div><b>命のともしび</b><span>次のプレイヤーターン中、致死ダメージを受けてもHP1で耐える。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">☾</div><div><b>悪魔の微笑み</b><span>次の通常サイコロが1なら、その次の通常出目を4以下に制限。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">◆</div><div><b>鉄壁</b><span>次のプレイヤーターンでスキルが発動すると、そのターンのダメージを半減。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">♜</div><div><b>覇道 <em>0.01%</em></b><span>2ターンの間、通常サイコロの出目を2に固定。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">☠</div><div><b>デスロード <em>0.02%</em></b><span>次の2回のボス反撃ダメージが1.2倍。</span></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="guideBlock">
+          <summary>👁️ レア敵</summary>
+          <div class="guideBody">
+            <div class="guideLead">通常のザコに混ざって低確率で出現。危険だが報酬が強い。</div>
+            <div class="guideList">
+              <div class="guideItem"><div class="guideItemIcon">🎁</div><div><b>宝箱ミミック <em>1%</em></b><span>強敵。撃破すると★★★以上の商品を1個確定。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🏃</div><div><b>逃走商人 <em>5%</em></b><span>2ターン以内に倒せば★★★★以上を1個確定。間に合わなければ逃走。</span></div></div>
+              <div class="guideItem"><div class="guideItemIcon">🟡</div><div><b>金色スライム <em>0.1%</em></b><span>撃破すると商品を2個確定ドロップ。</span></div></div>
+            </div>
+          </div>
+        </details>
+
+        <details class="guideBlock">
+          <summary>⭐ 商品レアリティ</summary>
+          <div class="guideBody">
+            <div class="guideLead">通常ドロップはレアリティ帯を先に抽選。★★★★以上はかなり出にくい。</div>
+            <div class="guideOdds">
+              <div><b>★</b><span>55%</span></div>
+              <div><b>★★</b><span>27%</span></div>
+              <div><b>★★★</b><span>12%</span></div>
+              <div><b>★★★★</b><span>5%</span></div>
+              <div><b>★★★★★</b><span>1%</span></div>
+            </div>
+            <div class="guideHint">★★★★はキラキラ演出、★★★★★はさらに強い発光・キラキラ演出つき。レア敵やボスの「○★以上確定」報酬は、その保証が優先される。</div>
+          </div>
+        </details>
+      </div>
+    </div>
+
     <div class="panel"><div class="k">SELECT DUNGEON</div><div id="stageList" class="stageGrid"><div class="loading">ダンジョンデータを読み込み中…</div></div></div>
   </section>
 
