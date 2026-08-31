@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="./game.css?v=20260831-01">
 <link rel="stylesheet" href="./boss-skills.css?v=20260831-02">
 <link rel="stylesheet" href="./affiliate-ui.css?v=20260831-03">
+<link rel="stylesheet" href="./auth-ui.css?v=20260831-04">
 </head>
 <body>
 <div class="app">
@@ -46,10 +47,13 @@
 
   <section id="result" class="screen"><div class="panel clear"><div class="ico" id="rIco"></div><div class="title" id="rTitle"></div><div class="sub" id="rSub"></div><button class="btn" id="retry">もう一度潜る</button><button class="btn2" id="home">ステージ選択へ</button></div></section>
 
-  <div id="collectionArea"><div class="tabs"><button class="tab on" data-t="d">発見図鑑</button><button class="tab" data-t="w">欲しい</button><button class="tab" data-t="o">持ってる</button></div><div class="collection" id="collection"></div></div>
+  <div id="collectionArea"><div class="tabs"><button class="tab on" data-t="d">発見図鑑</button><button class="tab" data-t="w">欲しい</button><button class="tab" data-t="o">持ってる</button><button class="tab" data-t="s">あとで見る</button></div><div class="collection" id="collection"></div></div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4"></script>
+<script src="./auth-config.js?v=20260831-04"></script>
 <script src="./game.js?v=20260831-01"></script>
 <script src="./boss-skills.js?v=20260831-02"></script>
 <script src="./affiliate-ui.js?v=20260831-03"></script>
+<script src="./auth-ui.js?v=20260831-04"></script>
 </body>
 </html>
