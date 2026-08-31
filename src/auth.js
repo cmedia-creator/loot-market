@@ -67,17 +67,12 @@ async function claimFirstAdmin(env, userId) {
   return Boolean(result.meta?.changes);
 }
 
-async function responseMessage(response, fallback) {
-  try {
-    const body = await response.clone().json();
-    return body?.message || body?.error || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 function validAdminToken(request, env) {
   return Boolean(env.ADMIN_TOKEN) && request.headers.get('Authorization') === `Bearer ${env.ADMIN_TOKEN}`;
+}
+
+function errorText(error, fallback) {
+  return String(error?.body?.message || error?.message || fallback);
 }
 
 export async function isAdminSession(request, env) {
@@ -104,40 +99,21 @@ export async function getAdminAccessState(request, env) {
 
 export async function bootstrapFirstAdmin(request, env) {
   await ensureAdminUsersTable(env);
-  const session = await getAuthSession(request, env);
-  if (!session?.user?.id) return { ok: false, status: 401, error: 'Login required' };
   if (!env.ADMIN_TOKEN) return { ok: false, status: 503, error: 'ADMIN_TOKEN is not configured on the server' };
-  if (!validAdminToken(request, env)) return { ok: false, status: 401, error: 'Invalid ADMIN_TOKEN' };
+  if (!validAdminToken(request, env)) return { ok: false, status: 401, error: 'ADMIN_TOKENが違います。' };
+  if (await adminCount(env)) return { ok: false, status: 409, error: '管理者はすでに登録されています。ログインしてください。' };
 
-  if (!(await claimFirstAdmin(env, session.user.id))) {
-    return { ok: false, status: 409, error: 'An administrator is already registered' };
-  }
-  return {
-    ok: true,
-    status: 201,
-    user: { id: session.user.id, name: session.user.name, email: session.user.email },
-  };
-}
-
-export async function createFirstAdminAccount(request, env) {
-  await ensureAdminUsersTable(env);
-  if (!env.ADMIN_TOKEN) {
-    return new Response(JSON.stringify({ ok: false, error: 'ADMIN_TOKEN is not configured on the server' }), {
-      status: 503,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
-  }
-  if (!validAdminToken(request, env)) {
-    return new Response(JSON.stringify({ ok: false, error: 'ADMIN_TOKENが違います。' }), {
-      status: 401,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
-  }
-  if (await adminCount(env)) {
-    return new Response(JSON.stringify({ ok: false, error: '管理者はすでに登録されています。ログインしてください。' }), {
-      status: 409,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
+  const session = await getAuthSession(request, env);
+  if (session?.user?.id) {
+    if (!(await claimFirstAdmin(env, session.user.id))) {
+      return { ok: false, status: 409, error: '管理者はすでに登録されています。' };
+    }
+    return {
+      ok: true,
+      status: 201,
+      user: { id: session.user.id, name: session.user.name, email: session.user.email },
+      created: false,
+    };
   }
 
   let input = {};
@@ -145,66 +121,35 @@ export async function createFirstAdminAccount(request, env) {
   const email = String(input.email || '').trim().toLowerCase();
   const password = String(input.password || '');
   const name = String(input.name || email.split('@')[0] || 'LOOT ADMIN').trim().slice(0, 80);
-  if (!email || !email.includes('@')) {
-    return new Response(JSON.stringify({ ok: false, error: 'メールアドレスを確認してください。' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
-  }
-  if (password.length < 8 || password.length > 128) {
-    return new Response(JSON.stringify({ ok: false, error: 'パスワードは8〜128文字で入力してください。' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
-  }
+  if (!email || !email.includes('@')) return { ok: false, status: 400, error: 'メールアドレスを確認してください。' };
+  if (password.length < 8 || password.length > 128) return { ok: false, status: 400, error: 'パスワードは8〜128文字で入力してください。' };
 
   const auth = createAuth(env);
-  let authResponse = await auth.api.signUpEmail({
-    body: { name, email, password },
-    asResponse: true,
-  });
-  let mode = 'created';
-
-  // If the email was already created during a previous attempt, accept the same
-  // credentials and finish the first-admin setup instead of trapping the owner.
-  if (!authResponse.ok) {
-    const signInResponse = await auth.api.signInEmail({
-      body: { email, password, rememberMe: true },
-      asResponse: true,
-    });
-    if (!signInResponse.ok) {
-      const message = await responseMessage(authResponse, 'アカウントを作成できませんでした。');
-      return new Response(JSON.stringify({ ok: false, error: message }), {
-        status: authResponse.status || 400,
-        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-      });
+  let user = null;
+  let created = true;
+  try {
+    const data = await auth.api.signUpEmail({ body: { name, email, password } });
+    user = data?.user || data?.data?.user || null;
+  } catch (signUpError) {
+    // A previous failed setup may already have created the account. In that case,
+    // verify the same credentials and continue instead of forcing manual recovery.
+    try {
+      const data = await auth.api.signInEmail({ body: { email, password, rememberMe: true } });
+      user = data?.user || data?.data?.user || null;
+      created = false;
+    } catch {
+      return { ok: false, status: 400, error: errorText(signUpError, 'アカウントを作成できませんでした。') };
     }
-    authResponse = signInResponse;
-    mode = 'signed_in';
   }
 
-  let authBody = {};
-  try { authBody = await authResponse.clone().json(); } catch {}
-  const user = authBody?.user || authBody?.data?.user || null;
-  if (!user?.id) {
-    return new Response(JSON.stringify({ ok: false, error: 'アカウント作成後のユーザー情報を取得できませんでした。' }), {
-      status: 500,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
-  }
+  if (!user?.id) return { ok: false, status: 500, error: 'ユーザー情報を取得できませんでした。' };
   if (!(await claimFirstAdmin(env, user.id))) {
-    return new Response(JSON.stringify({ ok: false, error: '管理者はすでに登録されています。' }), {
-      status: 409,
-      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-    });
+    return { ok: false, status: 409, error: '管理者はすでに登録されています。' };
   }
-
-  const headers = new Headers(authResponse.headers);
-  headers.set('content-type', 'application/json; charset=utf-8');
-  headers.set('cache-control', 'no-store');
-  return new Response(JSON.stringify({
+  return {
     ok: true,
-    mode,
+    status: 201,
     user: { id: user.id, name: user.name, email: user.email },
-  }), { status: 201, headers });
+    created,
+  };
 }
