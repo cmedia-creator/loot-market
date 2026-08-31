@@ -10,7 +10,9 @@ const files = [
   'affiliate-ui.css',
   'affiliate-ui.js',
   'account-ui.css',
-  'account-ui.js'
+  'account-ui.js',
+  'dice-system.css',
+  'dice-system.js'
 ];
 
 await rm('dist', { recursive: true, force: true });
