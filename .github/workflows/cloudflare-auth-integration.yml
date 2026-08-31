@@ -31,6 +31,9 @@ jobs:
           node --check dice-system.js
           node --check rarity-system.js
           node --check dice-ui-fix.js
+          node --check src/admin-access.js
+          node --check src/auth.js
+          node --check src/entry.js
           node - <<'NODE'
           const fs=require('fs');
           const html=fs.readFileSync('admin.html','utf8');
@@ -80,7 +83,7 @@ jobs:
 
           status=$(curl -sS -o /tmp/rules-guest.json -w "%{http_code}" "$ORIGIN/api/stage-rules")
           test "$status" = "401"
-      - name: Verify guest, signup, collection, recommendation, logout
+      - name: Verify guest, signup, admin session, collection, recommendation, logout
         run: |
           set -euo pipefail
           ORIGIN='http://127.0.0.1:8787'
@@ -95,6 +98,29 @@ jobs:
 
           curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/auth-check" > /tmp/session.json
           node -e "const j=require('/tmp/session.json'); if(!j.authenticated||j.user.email!=='auth-test@example.com') process.exit(1)"
+
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/admin.html" > /tmp/admin-bootstrap.html
+          grep -q '初回セットアップ' /tmp/admin-bootstrap.html
+          grep -q '初回のみ' /tmp/admin-bootstrap.html
+
+          curl -fsS -b /tmp/cookies.txt \
+            -X POST -H 'Authorization: Bearer test-admin-token' \
+            "$ORIGIN/api/admin/bootstrap" > /tmp/admin-claim.json
+          node -e "const j=require('/tmp/admin-claim.json'); if(!j.ok||j.user.email!=='auth-test@example.com') process.exit(1)"
+
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/admin.html" > /tmp/admin-page.html
+          grep -q 'BETTER AUTH / ADMIN SESSION' /tmp/admin-page.html
+          grep -q 'ADMIN_TOKEN入力不要' /tmp/admin-page.html
+          grep -q "sessionStorage.setItem('loot_admin_token','session')" /tmp/admin-page.html
+
+          curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/stage-rules" > /tmp/session-rules.json
+          node -e "const j=require('/tmp/session-rules.json'); if(!j.ok||!j.data.some(x=>x.stage_id==='stage-01')) process.exit(1)"
+
+          curl -fsS -b /tmp/cookies.txt \
+            -X PUT -H 'content-type: application/json' \
+            -d '{"disabled_turn_dice":["lucky"],"disabled_special_dice":[],"disabled_combo_skills":[]}' \
+            "$ORIGIN/api/stage-rules/stage-01" > /tmp/session-rule-put.json
+          node -e "const j=require('/tmp/session-rule-put.json'); if(!j.ok||!j.data.disabled_turn_dice.includes('lucky')) process.exit(1)"
 
           curl -fsS -b /tmp/cookies.txt \
             -X PUT -H 'content-type: application/json' \
@@ -112,6 +138,9 @@ jobs:
             "$ORIGIN/api/auth/sign-out" > /tmp/signout.json
           curl -fsS -b /tmp/cookies.txt "$ORIGIN/api/auth-check" > /tmp/after.json
           node -e "const j=require('/tmp/after.json'); if(j.authenticated) process.exit(1)"
+
+          curl -fsS "$ORIGIN/admin.html" > /tmp/admin-login.html
+          grep -q '管理者ログイン' /tmp/admin-login.html
 
           curl -fsS "$ORIGIN/" -o /tmp/index.html
           grep -q 'LOOT MARKET' /tmp/index.html
